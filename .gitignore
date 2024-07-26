@@ -5,6 +5,9 @@
 .idea/
 .vscode/
 
+# CMake
+cmake-out/
+
 # Make
 build-out/
 
