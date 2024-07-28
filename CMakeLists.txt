@@ -5,7 +5,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 endif()
 
 execute_process(
-  COMMAND $ENV{SHELL} -c "grep -m1 version poac.toml"
+  COMMAND $ENV{SHELL} -c "grep -m1 version ${CMAKE_SOURCE_DIR}/poac.toml"
   COMMAND $ENV{SHELL} -c "cut -f 2 -d'\"'"
   RESULT_VARIABLE POAC_VERSION
   OUTPUT_QUIET
@@ -50,10 +50,12 @@ pkg_check_modules(
 )
 
 include(FetchContent)
+set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(
   toml11
   GIT_REPOSITORY https://github.com/ToruNiina/toml11.git
   GIT_TAG v4.0.3
+  GIT_SUBMODULES ""
 )
 FetchContent_MakeAvailable(toml11)
 
