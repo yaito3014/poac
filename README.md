@@ -14,7 +14,7 @@
 > [!CAUTION]
 > Poac is still under development and may contain a bunch of bugs.
 
-![demo](./demo.gif)
+![demo](https://vhs.charm.sh/vhs-5dQzA2VI3B0e4jTAC6RrME.gif)
 
 Poac (pronounced as `/pəʊək/`) is a package manager and build system for C++ users, inspired by Cargo for Rust.  Poac is designed as a structure-oriented build system, which means that as long as you follow Poac's designated project structure, you almost do not need configurations, much less a language to build, unlike CMake.  If you do not like writing a bunch of configurations to build your project, Poac might be best suited.  Currently, the supported project structure can be known by looking at this repository since Poac can build itself.
 
@@ -98,7 +98,7 @@ If your environment is not included in the released packages, you have to build 
 * fmt: `>=8.1.1 && <11`
     * `libfmt-dev` on APT
     * `fmt` on Homebrew
-* libgit2: `>=1.1.0 && <2`
+* libgit2: `>=1.1.0 && <1.9`
     * `libgit2-dev` on APT
     * `libgit2` on Homebrew
 * libcurl: `>=7.79.1 && <9`
@@ -113,7 +113,7 @@ If your environment is not included in the released packages, you have to build 
 
 When running Make, the following libraries will be installed automatically.
 
-* [toml11](https://github.com/ToruNiina/toml11): [`v3.8.0`](https://github.com/ToruNiina/toml11/releases/tag/v3.8.0)
+* [toml11](https://github.com/ToruNiina/toml11): [`v4.2.0`](https://github.com/ToruNiina/toml11/releases/tag/v4.2.0)
 
 Once you have all the necessary requirements in place, you can build Poac by the following commands:
 

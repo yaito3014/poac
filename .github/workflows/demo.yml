@@ -1,0 +1,50 @@
+name: Demo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+
+    env:
+      CXX: g++-13
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-ubuntu-deps
+
+      - name: Print versions
+        run: make versions
+
+      - name: Build Poac
+        run: make RELEASE=1 -j4
+
+      - name: Install Poac
+        run: |
+          make PREFIX="$HOME/.local" install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ttyd
+        run: |
+          wget https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -P "$HOME/.local/bin"
+          mv "$HOME/.local/bin/ttyd.x86_64" "$HOME/.local/bin/ttyd"
+          chmod +x "$HOME/.local/bin/ttyd"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Install VHS
+        run: go install github.com/charmbracelet/vhs@latest
+
+      - name: Generate and publish a new demo
+        run: vhs --publish demo.tape
