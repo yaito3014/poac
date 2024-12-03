@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Rustify.hpp"
 #include "Global.hpp"
 
+#include <cstddef>
 #include <git2/oid.h>
 #include <ostream>
 #include <string>
@@ -10,7 +10,7 @@
 
 namespace git2 {
 
-inline constexpr usize SHORT_HASH_LEN = 8;
+inline constexpr size_t SHORT_HASH_LEN = 8;
 
 struct Oid : public GlobalState {
   // TODO: ideally, use one of the following:
@@ -46,4 +46,4 @@ struct Oid : public GlobalState {
 std::ostream& operator<<(std::ostream& os, const Oid& oid);
 bool operator==(const Oid& lhs, const Oid& rhs);
 
-} // end namespace git2
+}  // end namespace git2

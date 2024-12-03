@@ -10,8 +10,9 @@
 #pragma once
 
 #include "Exception.hpp"
-#include "Rustify.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -25,30 +26,30 @@ struct SemverError : public PoacError {
 };
 
 struct VersionToken {
-  enum class Kind {
-    Num, // [1-9][0-9]*
-    Ident, // [a-zA-Z0-9][a-zA-Z0-9-]*
-    Dot, // .
-    Hyphen, // -
-    Plus, // +
+  enum class Kind : uint8_t {
+    Num,     // [1-9][0-9]*
+    Ident,   // [a-zA-Z0-9][a-zA-Z0-9-]*
+    Dot,     // .
+    Hyphen,  // -
+    Plus,    // +
     Eof,
     Unknown,
   };
   using enum Kind;
 
   Kind kind;
-  std::variant<std::monostate, u64, std::string_view> value;
+  std::variant<std::monostate, uint64_t, std::string_view> value;
 
   constexpr VersionToken(
       Kind kind,
-      const std::variant<std::monostate, u64, std::string_view>& value
+      const std::variant<std::monostate, uint64_t, std::string_view>& value
   ) noexcept
       : kind(kind), value(value) {}
   constexpr explicit VersionToken(Kind kind) noexcept
       : kind(kind), value(std::monostate{}) {}
 
   std::string toString() const noexcept;
-  usize size() const noexcept;
+  size_t size() const noexcept;
 };
 
 struct Prerelease {
@@ -74,9 +75,9 @@ struct BuildMetadata {
 };
 
 struct Version {
-  u64 major{};
-  u64 minor{};
-  u64 patch{};
+  uint64_t major{};
+  uint64_t minor{};
+  uint64_t patch{};
   Prerelease pre;
   BuildMetadata build;
 
@@ -93,7 +94,7 @@ bool operator>=(const Version& lhs, const Version& rhs) noexcept;
 
 struct VersionLexer {
   std::string_view s;
-  usize pos{ 0 };
+  size_t pos{ 0 };
 
   constexpr explicit VersionLexer(const std::string_view str) noexcept
       : s(str) {}
@@ -118,7 +119,7 @@ struct VersionParser {
       : lexer(str) {}
 
   Version parse();
-  u64 parseNum();
+  uint64_t parseNum();
   void parseDot();
   Prerelease parsePre();
   VersionToken parseNumOrIdent();

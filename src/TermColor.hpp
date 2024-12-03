@@ -1,9 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
-enum class ColorMode {
+enum class ColorMode : uint8_t {
   Always,
   Auto,
   Never,

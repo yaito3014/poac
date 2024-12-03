@@ -2,6 +2,7 @@
 
 #include "../Cli.hpp"
 #include "../Logger.hpp"
+#include "../Manifest.hpp"
 
 #include <cstdlib>
 #include <span>
@@ -10,7 +11,7 @@
 
 static int cleanMain(std::span<const std::string_view> args) noexcept;
 
-const Subcmd CLEAN_CMD = //
+const Subcmd CLEAN_CMD =  //
     Subcmd{ "clean" }
         .setDesc("Remove the built directory")
         .addOpt(Opt{ "--profile" }
@@ -21,7 +22,8 @@ const Subcmd CLEAN_CMD = //
 
 static int
 cleanMain(const std::span<const std::string_view> args) noexcept {
-  fs::path outDir = "poac-out"; // TODO: share across sources
+  // TODO: share across sources
+  fs::path outDir = getProjectBasePath() / "poac-out";
 
   // Parse args
   for (auto itr = args.begin(); itr != args.end(); ++itr) {
@@ -49,7 +51,7 @@ cleanMain(const std::span<const std::string_view> args) noexcept {
   }
 
   if (fs::exists(outDir)) {
-    logger::info("Removing", fs::canonical(outDir).string());
+    logger::info("Removing", "{}", fs::canonical(outDir).string());
     fs::remove_all(outDir);
   }
   return EXIT_SUCCESS;

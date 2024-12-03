@@ -10,10 +10,13 @@
 #include "Build.hpp"
 #include "Common.hpp"
 
+#include <charconv>
+#include <cstdint>
 #include <cstdlib>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 static int runMain(std::span<const std::string_view> args);
 
@@ -50,15 +53,25 @@ runMain(const std::span<const std::string_view> args) {
       if (itr + 1 == args.end()) {
         return Subcmd::missingArgumentForOpt(*itr);
       }
-      setParallelism(std::stoul((++itr)->data()));
+      ++itr;
+
+      uint64_t numThreads{};
+      auto [ptr, ec] =
+          std::from_chars(itr->data(), itr->data() + itr->size(), numThreads);
+      if (ec == std::errc()) {
+        setParallelism(numThreads);
+      } else {
+        logger::error("invalid number of threads: ", *itr);
+        return EXIT_FAILURE;
+      }
     } else {
       break;
     }
   }
 
-  std::string runArgs;
+  std::vector<std::string> runArgs;
   for (; itr != args.end(); ++itr) {
-    runArgs += ' ' + std::string(*itr);
+    runArgs.emplace_back(*itr);
   }
 
   std::string outDir;
@@ -67,6 +80,6 @@ runMain(const std::span<const std::string_view> args) {
   }
 
   const std::string& projectName = getPackageName();
-  const std::string command = outDir + "/" + projectName + runArgs;
+  const Command command(outDir + "/" + projectName, runArgs);
   return execCmd(command);
 }

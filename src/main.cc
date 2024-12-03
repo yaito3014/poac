@@ -12,7 +12,7 @@
 
 const Cli&
 getCli() noexcept {
-  static const Cli cli = //
+  static const Cli cli =  //
       Cli{ "poac" }
           .setDesc("A package manager and build system for C++")
           .addOpt(Opt{ "--verbose" }
@@ -31,7 +31,7 @@ getCli() noexcept {
                       .setDesc("Coloring: auto, always, never")
                       .setPlaceholder("<WHEN>")
                       .setGlobal(true))
-          .addOpt(Opt{ "--help" } //
+          .addOpt(Opt{ "--help" }  //
                       .setShort("-h")
                       .setDesc("Print help")
                       .setGlobal(true))
@@ -39,7 +39,7 @@ getCli() noexcept {
                       .setShort("-V")
                       .setDesc("Print version info and exit")
                       .setGlobal(false))
-          .addOpt(Opt{ "--list" } //
+          .addOpt(Opt{ "--list" }  //
                       .setDesc("List all subcommands")
                       .setGlobal(false)
                       .setHidden(true))
@@ -91,13 +91,11 @@ main(int argc, char* argv[]) {
         const std::vector<std::string_view> remArgs(itr + 1, args.end());
         const int exitCode = getCli().exec(*itr, remArgs);
         if (exitCode != EXIT_SUCCESS) {
-          logger::error(
-              "'poac ", *itr, "' failed with exit code `", exitCode, '`'
-          );
+          logger::error("'poac {}' failed with exit code `{}`", *itr, exitCode);
         }
         return exitCode;
       } catch (const std::exception& e) {
-        logger::error(e.what());
+        logger::error("{}", e.what());
         return EXIT_FAILURE;
       }
     }

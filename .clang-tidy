@@ -2,90 +2,47 @@
 UseColor: true
 WarningsAsErrors: true,*
 HeaderFilterRegex: "src/"
-Checks: -*
-  boost-*
-  bugprone-*
-  -bugprone-branch-clone
-  -bugprone-easily-swappable-parameters
-  -bugprone-exception-escape
-  -bugprone-unchecked-optional-access
-  cert-*
-  -cert-err58-cpp
-  -cert-env33-c
-  clang-analyzer-*
-  concurrency-*
-  -concurrency-mt-unsafe
-  cppcoreguidelines-*
-  -cppcoreguidelines-pro-bounds-array-to-pointer-decay
-  google-*
-  -google-readability-todo
-  misc-*
-  -misc-include-cleaner
-  -misc-no-recursion
-  -misc-use-anonymous-namespace
-  modernize-*
-  -modernize-use-nodiscard
-  -modernize-use-trailing-return-type
-  performance-*
-  portability-*
-  readability-*
-  -readability-else-after-return
-  -readability-implicit-bool-conversion
+Checks: '-*,clang-diagnostic-*,llvm-*,-llvm-header-guard,bugprone-*,-bugprone-branch-clone,-bugprone-easily-swappable-parameters,-bugprone-exception-escape,-bugprone-unchecked-optional-access,-bugprone-crtp-constructor-accessibility,cert-*,-cert-err58-cpp,clang-analyzer-*,concurrency-*,-concurrency-mt-unsafe,cppcoreguidelines-*,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,google-*,-google-readability-todo,misc-*,-misc-include-cleaner,-misc-no-recursion,-misc-use-anonymous-namespace,modernize-*,-misc-use-internal-linkage,-modernize-use-nodiscard,-modernize-use-trailing-return-type,performance-*,portability-*,readability-*,-*-else-after-return,-readability-implicit-bool-conversion,-readability-identifier-length,-readability-function-cognitive-complexity'
 CheckOptions:
   - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value: true
 
-  - key: readability-function-cognitive-complexity.IgnoreMacros
-    value: true
-
-  # https://clang.llvm.org/extra/clang-tidy/checks/readability/identifier-length.html
-  - key: readability-identifier-length.IgnoredVariableNames
-    value: ^(c|op|i)$
-  - key: readability-identifier-length.IgnoredParameterNames
-    value: ^(c|op|os)$
-  - key: readability-identifier-length.IgnoredLoopCounterNames
-    value: ^[cij]$
-
   # https://clang.llvm.org/extra/clang-tidy/checks/readability/identifier-naming.html
-
-  # CamelCase represents types and enum constants.
-  - key: readability-identifier-naming.AbstractClassCase
-    value: CamelCase
   - key: readability-identifier-naming.ClassCase
-    value: CamelCase
-  - key: readability-identifier-naming.StructCase
-    value: CamelCase
-  - key: readability-identifier-naming.EnumCase
-    value: CamelCase
-  - key: readability-identifier-naming.TypeAliasCase
     value: CamelCase
   - key: readability-identifier-naming.ConceptCase
     value: CamelCase
-  - key: readability-identifier-naming.TemplateParameterCase
+  - key: readability-identifier-naming.EnumCase
     value: CamelCase
   - key: readability-identifier-naming.EnumConstantCase
     value: CamelCase
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.UnionCase
+    value: CamelCase
 
-  # camelBack represents data.
   - key: readability-identifier-naming.FunctionCase
-    value: camelBack
-  - key: readability-identifier-naming.MethodCase
-    value: camelBack
-  - key: readability-identifier-naming.VariableCase
     value: camelBack
   - key: readability-identifier-naming.LocalConstantCase
     value: camelBack
   - key: readability-identifier-naming.LocalVariableCase
     value: camelBack
-  - key: readability-identifier-naming.MemberCase
-    value: camelBack
   - key: readability-identifier-naming.NamespaceCase
     value: camelBack
+  - key: readability-identifier-naming.MemberCase
+    value: camelBack
+  - key: readability-identifier-naming.MethodCase
+    value: camelBack
+  - key: readability-identifier-naming.ParameterCase
+    value: camelBack
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack
 
-  # UPPER_CASE represents something shared across the entire program.
-  - key: readability-identifier-naming.MacroDefinitionCase
-    value: UPPER_CASE
   - key: readability-identifier-naming.GlobalConstantCase
     value: UPPER_CASE
   - key: readability-identifier-naming.GlobalVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE

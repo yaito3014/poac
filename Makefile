@@ -23,7 +23,7 @@ MKDIR_P := @mkdir -p
 LIBGIT2_VERREQ := libgit2 >= 1.1.0, libgit2 < 1.9.0
 LIBCURL_VERREQ := libcurl >= 7.79.1, libcurl < 9.0.0
 NLOHMANN_JSON_VERREQ := nlohmann_json >= 3.10.5, nlohmann_json < 4.0.0
-TBB_VERREQ := tbb >= 2021.5.0, tbb < 2022.0.0
+TBB_VERREQ := tbb >= 2021.5.0, tbb < 2023.0.0
 FMT_VERREQ := fmt >= 8.1.1, fmt < 12.0.0
 
 DEFINES := -DPOAC_POAC_PKG_VERSION='"$(VERSION)"' \
@@ -94,10 +94,10 @@ $(O)/tests/test_BuildConfig: $(O)/tests/test_BuildConfig.o $(O)/Algos.o \
   $(O)/TermColor.o $(O)/Manifest.o $(O)/Parallelism.o $(O)/Semver.o \
   $(O)/VersionReq.o $(O)/Git2/Repository.o $(O)/Git2/Object.o $(O)/Git2/Oid.o \
   $(O)/Git2/Global.o $(O)/Git2/Config.o $(O)/Git2/Exception.o $(O)/Git2/Time.o \
-  $(O)/Git2/Commit.o
+  $(O)/Git2/Commit.o $(O)/Command.o
 	$(CXX) $(CXXFLAGS) $^ $(LIBS) $(LDFLAGS) -o $@
 
-$(O)/tests/test_Algos: $(O)/tests/test_Algos.o $(O)/TermColor.o
+$(O)/tests/test_Algos: $(O)/tests/test_Algos.o $(O)/TermColor.o $(O)/Command.o
 	$(CXX) $(CXXFLAGS) $^ $(LIBS) $(LDFLAGS) -o $@
 
 $(O)/tests/test_Semver: $(O)/tests/test_Semver.o $(O)/TermColor.o
@@ -110,7 +110,7 @@ $(O)/tests/test_VersionReq: $(O)/tests/test_VersionReq.o $(O)/TermColor.o \
 $(O)/tests/test_Manifest: $(O)/tests/test_Manifest.o $(O)/TermColor.o \
   $(O)/Semver.o $(O)/VersionReq.o $(O)/Algos.o $(O)/Git2/Repository.o \
   $(O)/Git2/Global.o $(O)/Git2/Oid.o $(O)/Git2/Config.o $(O)/Git2/Exception.o \
-  $(O)/Git2/Object.o
+  $(O)/Git2/Object.o $(O)/Command.o
 	$(CXX) $(CXXFLAGS) $^ $(LIBS) $(LDFLAGS) -o $@
 
 

@@ -12,9 +12,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 static int fmtMain(std::span<const std::string_view> args);
@@ -31,7 +33,7 @@ const Subcmd FMT_CMD =
 static void
 collectFormatTargetFiles(
     const fs::path& manifestDir, const std::vector<fs::path>& excludes,
-    std::string& clangFormatArgs
+    std::vector<std::string>& clangFormatArgs
 ) {
   // Read git repository if exists
   git2::Repository repo = git2::Repository();
@@ -44,10 +46,10 @@ collectFormatTargetFiles(
   }
 
   const auto isExcluded = [&](std::string_view path) -> bool {
-    return std::find_if(
-               excludes.begin(), excludes.end(),
-               [&](const fs::path& p) {
-                 return fs::relative(p, manifestDir).string() == path;
+    return std::ranges::find_if(
+               excludes,
+               [&](const fs::path& path2) {
+                 return fs::relative(path2, manifestDir).string() == path;
                }
            )
            != excludes.end();
@@ -74,7 +76,7 @@ collectFormatTargetFiles(
 
       const std::string ext = path.extension().string();
       if (SOURCE_FILE_EXTS.contains(ext) || HEADER_FILE_EXTS.contains(ext)) {
-        clangFormatArgs += ' ' + path.string();
+        clangFormatArgs.push_back(path.string());
       }
     }
   }
@@ -99,7 +101,7 @@ fmtMain(const std::span<const std::string_view> args) {
         return Subcmd::missingArgumentForOpt(*itr);
       }
 
-      excludes.push_back(*++itr);
+      excludes.emplace_back(*++itr);
     } else {
       return FMT_CMD.noSuchArg(*itr);
     }
@@ -114,22 +116,31 @@ fmtMain(const std::span<const std::string_view> args) {
   }
 
   const std::string_view packageName = getPackageName();
-  std::string clangFormatArgs = "--style=file --fallback-style=LLVM -Werror";
+  std::vector<std::string> clangFormatArgs{
+    "--style=file",
+    "--fallback-style=LLVM",
+    "-Werror",
+  };
   if (isVerbose()) {
-    clangFormatArgs += " --verbose";
+    clangFormatArgs.emplace_back("--verbose");
   }
   if (isCheck) {
-    clangFormatArgs += " --dry-run";
+    clangFormatArgs.emplace_back("--dry-run");
   } else {
-    clangFormatArgs += " -i";
-    logger::info("Formatting", packageName);
+    clangFormatArgs.emplace_back("-i");
+    logger::info("Formatting", "{}", packageName);
   }
 
-  const fs::path& manifestDir = getManifestPath().parent_path();
-  collectFormatTargetFiles(manifestDir, excludes, clangFormatArgs);
+  const fs::path projectPath = getProjectBasePath();
+  collectFormatTargetFiles(projectPath, excludes, clangFormatArgs);
 
-  const std::string clangFormat = "cd " + manifestDir.string()
-                                  + " && ${POAC_FMT:-clang-format} "
-                                  + clangFormatArgs;
+  const char* poacFmt = std::getenv("POAC_FMT");
+  if (poacFmt == nullptr) {
+    poacFmt = "clang-format";
+  }
+
+  const Command clangFormat = Command(poacFmt, std::move(clangFormatArgs))
+                                  .setWorkingDirectory(projectPath.string());
+
   return execCmd(clangFormat);
 }

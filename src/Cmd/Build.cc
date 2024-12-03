@@ -7,7 +7,9 @@
 #include "../Parallelism.hpp"
 #include "Common.hpp"
 
+#include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
@@ -34,9 +36,26 @@ int
 buildImpl(std::string& outDir, const bool isDebug) {
   const auto start = std::chrono::steady_clock::now();
 
-  outDir = emitMakefile(isDebug, /*includeDevDeps=*/false);
-  const std::string makeCommand = getMakeCommand() + " -C " + outDir;
-  const int exitCode = execCmd(makeCommand);
+  const BuildConfig config = emitMakefile(isDebug, /*includeDevDeps=*/false);
+  outDir = config.outBasePath;
+
+  const std::string& packageName = getPackageName();
+  const Command makeCmd = getMakeCommand().addArg("-C").addArg(outDir).addArg(
+      (config.outBasePath / packageName).string()
+  );
+  Command checkUpToDateCmd = makeCmd;
+  checkUpToDateCmd.addArg("--question");
+
+  int exitCode = execCmd(checkUpToDateCmd);
+  if (exitCode != EXIT_SUCCESS) {
+    // If packageName binary is not up-to-date, compile it.
+    logger::info(
+        "Compiling", "{} v{} ({})", packageName, getPackageVersion().toString(),
+        getProjectBasePath().string()
+
+    );
+    exitCode = execCmd(makeCmd);
+  }
 
   const auto end = std::chrono::steady_clock::now();
   const std::chrono::duration<double> elapsed = end - start;
@@ -45,21 +64,18 @@ buildImpl(std::string& outDir, const bool isDebug) {
     const Profile& profile = isDebug ? getDevProfile() : getReleaseProfile();
 
     std::vector<std::string_view> profiles;
-    if (profile.opt_level.value() == 0) {
-      profiles.push_back("unoptimized");
+    if (profile.optLevel.value() == 0) {
+      profiles.emplace_back("unoptimized");
     } else {
-      profiles.push_back("optimized");
+      profiles.emplace_back("optimized");
     }
     if (profile.debug.value()) {
-      profiles.push_back("debuginfo");
+      profiles.emplace_back("debuginfo");
     }
 
     logger::info(
-        "Finished",
-        fmt::format(
-            "`{}` profile [{}] target(s) in {:.2f}s", modeToProfile(isDebug),
-            fmt::join(profiles, " + "), elapsed.count()
-        )
+        "Finished", "`{}` profile [{}] target(s) in {:.2f}s",
+        modeToProfile(isDebug), fmt::join(profiles, " + "), elapsed.count()
     );
   }
   return exitCode;
@@ -87,7 +103,17 @@ buildMain(const std::span<const std::string_view> args) {
       if (itr + 1 == args.end()) {
         return Subcmd::missingArgumentForOpt(*itr);
       }
-      setParallelism(std::stoul((++itr)->data()));
+      ++itr;
+
+      uint64_t numThreads{};
+      auto [ptr, ec] =
+          std::from_chars(itr->data(), itr->data() + itr->size(), numThreads);
+      if (ec == std::errc()) {
+        setParallelism(numThreads);
+      } else {
+        logger::error("invalid number of threads: ", *itr);
+        return EXIT_FAILURE;
+      }
     } else {
       return BUILD_CMD.noSuchArg(*itr);
     }
@@ -100,6 +126,6 @@ buildMain(const std::span<const std::string_view> args) {
 
   // Build compilation database
   const std::string outDir = emitCompdb(isDebug, /*includeDevDeps=*/false);
-  logger::info("Generated", outDir, "/compile_commands.json");
+  logger::info("Generated", "{}/compile_commands.json", outDir);
   return EXIT_SUCCESS;
 }

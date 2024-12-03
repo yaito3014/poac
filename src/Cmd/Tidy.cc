@@ -5,10 +5,11 @@
 #include "../Cli.hpp"
 #include "../Logger.hpp"
 #include "../Parallelism.hpp"
-#include "../Rustify.hpp"
 #include "Common.hpp"
 
+#include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <span>
 #include <string>
@@ -24,7 +25,7 @@ const Subcmd TIDY_CMD =
         .setMainFn(tidyMain);
 
 static int
-tidyImpl(const std::string_view makeCmd) {
+tidyImpl(const Command& makeCmd) {
   const auto start = std::chrono::steady_clock::now();
 
   const int exitCode = execCmd(makeCmd);
@@ -55,7 +56,17 @@ tidyMain(const std::span<const std::string_view> args) {
       if (itr + 1 == args.end()) {
         return Subcmd::missingArgumentForOpt(*itr);
       }
-      setParallelism(std::stoul((++itr)->data()));
+      ++itr;
+
+      uint64_t numThreads{};
+      auto [ptr, ec] =
+          std::from_chars(itr->data(), itr->data() + itr->size(), numThreads);
+      if (ec == std::errc()) {
+        setParallelism(numThreads);
+      } else {
+        logger::error("invalid number of threads: ", *itr);
+        return EXIT_FAILURE;
+      }
     } else {
       return TIDY_CMD.noSuchArg(*itr);
     }
@@ -71,10 +82,10 @@ tidyMain(const std::span<const std::string_view> args) {
     setParallelism(1);
   }
 
-  const fs::path outDir =
+  const BuildConfig config =
       emitMakefile(/*isDebug=*/true, /*includeDevDeps=*/false);
 
-  std::string tidyFlags = " POAC_TIDY_FLAGS='";
+  std::string tidyFlags = "POAC_TIDY_FLAGS=";
   if (!isVerbose()) {
     tidyFlags += "-quiet";
   }
@@ -85,13 +96,16 @@ tidyMain(const std::span<const std::string_view> args) {
   if (fix) {
     tidyFlags += " -fix";
   }
-  tidyFlags += '\'';
 
-  std::string makeCmd = getMakeCommand();
-  makeCmd += " -C ";
-  makeCmd += outDir.string();
-  makeCmd += tidyFlags;
-  makeCmd += " tidy";
+  Command makeCmd(getMakeCommand());
+  makeCmd.addArg("-C");
+  makeCmd.addArg(config.outBasePath.string());
+  makeCmd.addArg(tidyFlags);
+  makeCmd.addArg("tidy");
+  if (fix) {
+    // Keep going to apply fixes to as many files as possible.
+    makeCmd.addArg("--keep-going");
+  }
 
   logger::info("Running", "clang-tidy");
   return tidyImpl(makeCmd);

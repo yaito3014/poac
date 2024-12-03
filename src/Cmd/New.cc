@@ -20,7 +20,7 @@
 
 static int newMain(std::span<const std::string_view> args);
 
-const Subcmd NEW_CMD = //
+const Subcmd NEW_CMD =  //
     Subcmd{ "new" }
         .setDesc("Create a new poac project")
         .addOpt(OPT_BIN)
@@ -32,6 +32,7 @@ static constexpr std::string_view MAIN_CC =
     "#include <iostream>\n\n"
     "int main() {\n"
     "  std::cout << \"Hello, world!\" << std::endl;\n"
+    "  return 0;\n"
     "}\n";
 
 static std::string
@@ -42,7 +43,7 @@ getAuthor() noexcept {
     return config.getString("user.name") + " <" + config.getString("user.email")
            + ">";
   } catch (const git2::Exception& e) {
-    logger::debug(e.what());
+    logger::debug("{}", e.what());
     return "";
   }
 }

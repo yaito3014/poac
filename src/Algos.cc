@@ -1,13 +1,14 @@
 #include "Algos.hpp"
 
+#include "Command.hpp"
 #include "Exception.hpp"
 #include "Logger.hpp"
-#include "Rustify.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -38,49 +39,42 @@ toMacroName(const std::string_view name) noexcept {
   return macroName;
 }
 
-int
-execCmd(const std::string_view cmd) noexcept {
-  logger::debug("Running `", cmd, '`');
-  const int status = std::system(cmd.data());
-  const int exitCode = status >> 8;
-  return exitCode;
+std::string
+replaceAll(
+    std::string str, const std::string_view from, const std::string_view to
+) {
+  if (from.empty()) {
+    return str;  // If the substring to replace is empty, return the original
+                 // string
+  }
+
+  std::size_t startPos = 0;
+  while ((startPos = str.find(from, startPos)) != std::string::npos) {
+    str.replace(startPos, from.length(), to);
+    startPos += to.length();  // Move past the last replaced substring
+  }
+  return str;
 }
 
-static std::pair<std::string, int>
-getCmdOutputImpl(const std::string_view cmd) {
-  constexpr usize bufferSize = 128;
-  std::array<char, bufferSize> buffer{};
-  std::string output;
-
-  FILE* pipe = popen(cmd.data(), "r");
-  if (!pipe) {
-    throw PoacError("popen() failed!");
-  }
-
-  while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-    output += buffer.data();
-  }
-
-  const int status = pclose(pipe);
-  if (status == -1) {
-    throw PoacError("pclose() failed!");
-  }
-  const int exitCode = status >> 8;
-  return { output, exitCode };
+int
+execCmd(const Command& cmd) noexcept {
+  logger::debug("Running `{}`", cmd.toString());
+  return cmd.spawn().wait();
 }
 
 std::string
-getCmdOutput(const std::string_view cmd, const usize retry) {
-  logger::debug("Running `", cmd, '`');
+getCmdOutput(const Command& cmd, const size_t retry) {
+  logger::debug("Running `{}`", cmd.toString());
 
   int exitCode = EXIT_SUCCESS;
   int waitTime = 1;
-  for (usize i = 0; i < retry; ++i) {
-    const auto result = getCmdOutputImpl(cmd);
-    if (result.second == EXIT_SUCCESS) {
-      return result.first;
+  for (size_t i = 0; i < retry; ++i) {
+    const auto [curExitCode, stdout, stderr] = cmd.output();
+    static_cast<void>(stderr);
+    if (curExitCode == EXIT_SUCCESS) {
+      return stdout;
     }
-    exitCode = result.second;
+    exitCode = curExitCode;
 
     // Sleep for an exponential backoff.
     std::this_thread::sleep_for(std::chrono::seconds(waitTime));
@@ -91,44 +85,46 @@ getCmdOutput(const std::string_view cmd, const usize retry) {
 
 bool
 commandExists(const std::string_view cmd) noexcept {
-  std::string checkCmd = "command -v ";
-  checkCmd += cmd;
-  checkCmd += " >/dev/null 2>&1";
-  return execCmd(checkCmd) == EXIT_SUCCESS;
+  const int exitCode = Command("which")
+                           .addArg(cmd)
+                           .setStdoutConfig(Command::IOConfig::Null)
+                           .spawn()
+                           .wait();
+  return exitCode == EXIT_SUCCESS;
 }
 
 // ref: https://wandbox.org/permlink/zRjT41alOHdwcf00
-static usize
+static size_t
 levDistance(const std::string_view lhs, const std::string_view rhs) {
-  const usize lhsSize = lhs.size();
-  const usize rhsSize = rhs.size();
+  const size_t lhsSize = lhs.size();
+  const size_t rhsSize = rhs.size();
 
   // for all i and j, d[i,j] will hold the Levenshtein distance between the
   // first i characters of s and the first j characters of t
-  std::vector<std::vector<usize>> dist(
-      lhsSize + 1, std::vector<usize>(rhsSize + 1)
+  std::vector<std::vector<size_t>> dist(
+      lhsSize + 1, std::vector<size_t>(rhsSize + 1)
   );
   dist[0][0] = 0;
 
   // source prefixes can be transformed into empty string by dropping all
   // characters
-  for (usize i = 1; i <= lhsSize; ++i) {
+  for (size_t i = 1; i <= lhsSize; ++i) {
     dist[i][0] = i;
   }
 
   // target prefixes can be reached from empty source prefix by inserting every
   // character
-  for (usize j = 1; j <= rhsSize; ++j) {
+  for (size_t j = 1; j <= rhsSize; ++j) {
     dist[0][j] = j;
   }
 
-  for (usize i = 1; i <= lhsSize; ++i) {
-    for (usize j = 1; j <= rhsSize; ++j) {
-      const usize substCost = lhs[i - 1] == rhs[j - 1] ? 0 : 1;
+  for (size_t i = 1; i <= lhsSize; ++i) {
+    for (size_t j = 1; j <= rhsSize; ++j) {
+      const size_t substCost = lhs[i - 1] == rhs[j - 1] ? 0 : 1;
       dist[i][j] = std::min({
-          dist[i - 1][j] + 1, // deletion
-          dist[i][j - 1] + 1, // insertion
-          dist[i - 1][j - 1] + substCost // substitution
+          dist[i - 1][j] + 1,             // deletion
+          dist[i][j - 1] + 1,             // insertion
+          dist[i - 1][j - 1] + substCost  // substitution
       });
     }
   }
@@ -140,10 +136,9 @@ static bool
 equalsInsensitive(
     const std::string_view lhs, const std::string_view rhs
 ) noexcept {
-  return std::equal(
-      lhs.cbegin(), lhs.cend(), rhs.cbegin(), rhs.cend(),
-      [](char lhs, char rhs) { return std::tolower(lhs) == std::tolower(rhs); }
-  );
+  return std::ranges::equal(lhs, rhs, [](char lhs, char rhs) {
+    return std::tolower(lhs) == std::tolower(rhs);
+  });
 }
 
 std::optional<std::string_view>
@@ -161,12 +156,12 @@ findSimilarStr(
   // Keep going with the Levenshtein distance match.
   // If the LHS size is less than 3, use the LHS size minus 1 and if not,
   // use the LHS size divided by 3.
-  const usize length = lhs.size();
-  const usize maxDist = length < 3 ? length - 1 : length / 3;
+  const size_t length = lhs.size();
+  const size_t maxDist = length < 3 ? length - 1 : length / 3;
 
-  std::optional<std::pair<std::string_view, usize>> similarStr = std::nullopt;
+  std::optional<std::pair<std::string_view, size_t>> similarStr = std::nullopt;
   for (const std::string_view str : candidates) {
-    const usize curDist = levDistance(lhs, str);
+    const size_t curDist = levDistance(lhs, str);
     if (curDist <= maxDist) {
       // The first similar string found || More similar string found
       if (!similarStr.has_value() || curDist < similarStr->second) {
@@ -184,12 +179,15 @@ findSimilarStr(
 
 #ifdef POAC_TEST
 
+#  include "Rustify/Aliases.hpp"
+#  include "Rustify/Tests.hpp"
+
 #  include <array>
 #  include <limits>
 
 namespace tests {
 
-void
+static void
 testLevDistance() {
   // Test bytelength agnosticity
   for (char c = 0; c < std::numeric_limits<char>::max(); ++c) {
@@ -200,7 +198,7 @@ testLevDistance() {
   pass();
 }
 
-void
+static void
 testLevDistance2() {
   constexpr std::string_view str1 = "\nMäry häd ä little lämb\n\nLittle lämb\n";
   constexpr std::string_view str2 = "\nMary häd ä little lämb\n\nLittle lämb\n";
@@ -229,7 +227,7 @@ testLevDistance2() {
 // ref:
 // https://github.com/llvm/llvm-project/commit/a247ba9d15635d96225ef39c8c150c08f492e70a#diff-fd993637669817b267190e7de029b75af5a0328d43d9b70c2e8dd512512091a2
 
-void
+static void
 testFindSimilarStr() {
   constexpr std::array<std::string_view, 8> candidates{
     "if", "ifdef", "ifndef", "elif", "else", "endif", "elifdef", "elifndef"
@@ -255,7 +253,7 @@ testFindSimilarStr() {
   pass();
 }
 
-void
+static void
 testFindSimilarStr2() {
   constexpr std::array<std::string_view, 2> candidates{ "aaab", "aaabc" };
   assertEq(findSimilarStr("aaaa", candidates), "aaab"sv);
@@ -267,7 +265,7 @@ testFindSimilarStr2() {
   pass();
 }
 
-} // namespace tests
+}  // namespace tests
 
 int
 main() {

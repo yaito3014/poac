@@ -10,6 +10,8 @@
 #include "VersionReq.hpp"
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -89,7 +91,7 @@ struct into<Version> {
     return ver.toString();
   }
 };
-} // namespace toml
+}  // namespace toml
 // NOLINTEND(readability-identifier-naming)
 
 TOML11_DEFINE_CONVERSION_NON_INTRUSIVE(Package, name, edition, version);
@@ -99,7 +101,7 @@ findManifest() {
   fs::path candidate = fs::current_path();
   while (true) {
     const fs::path configPath = candidate / "poac.toml";
-    logger::debug("Finding manifest: ", configPath);
+    logger::debug("Finding manifest: {}", configPath.string());
     if (fs::exists(configPath)) {
       return configPath;
     }
@@ -134,14 +136,14 @@ struct SystemDependency {
 void
 Profile::merge(const Profile& other) {
   cxxflags.insert(other.cxxflags.begin(), other.cxxflags.end());
-  if (!lto) { // false is the default value
+  if (!lto) {  // false is the default value
     lto = other.lto;
   }
   if (other.debug.has_value() && !debug.has_value()) {
     debug = other.debug;
   }
-  if (other.opt_level.has_value() && !opt_level.has_value()) {
-    opt_level = other.opt_level;
+  if (other.optLevel.has_value() && !optLevel.has_value()) {
+    optLevel = other.optLevel;
   }
 }
 
@@ -199,8 +201,13 @@ getManifestPath() {
   return Manifest::instance().manifestPath.value();
 }
 
+fs::path
+getProjectBasePath() {
+  return fs::absolute(getManifestPath().parent_path());
+}
+
 // Returns an error message if the package name is invalid.
-std::optional<std::string> // TODO: result-like types make more sense.
+std::optional<std::string>  // TODO: result-like types make more sense.
 validatePackageName(const std::string_view name) noexcept {
   // Empty
   if (name.empty()) {
@@ -303,7 +310,7 @@ parseProfile(const toml::table& table) {
       if (!flag.is_string()) {
         throw PoacError("[profile.cxxflags] must be an array of strings");
       }
-      const std::string flagStr = flag.as_string();
+      const std::string& flagStr = flag.as_string();
       validateCxxflag(flagStr);
       profile.cxxflags.insert(flagStr);
     }
@@ -315,11 +322,12 @@ parseProfile(const toml::table& table) {
     profile.debug = table.at("debug").as_boolean();
   }
   if (table.contains("opt_level") && table.at("opt_level").is_integer()) {
-    const i32 optLevel = table.at("opt_level").as_integer();
+    const int32_t optLevel =
+        static_cast<int32_t>(table.at("opt_level").as_integer());
     if (optLevel < 0 || optLevel > 3) {
       throw PoacError("opt_level must be between 0 and 3");
     }
-    profile.opt_level = optLevel;
+    profile.optLevel = optLevel;
   }
   return profile;
 }
@@ -375,8 +383,8 @@ getDevProfile() {
   if (!devProfile.debug.has_value()) {
     devProfile.debug = true;
   }
-  if (!devProfile.opt_level.has_value()) {
-    devProfile.opt_level = 0;
+  if (!devProfile.optLevel.has_value()) {
+    devProfile.optLevel = 0;
   }
   manifest.devProfile = devProfile;
   return manifest.devProfile.value();
@@ -394,8 +402,8 @@ getReleaseProfile() {
   if (!releaseProfile.debug.has_value()) {
     releaseProfile.debug = false;
   }
-  if (!releaseProfile.opt_level.has_value()) {
-    releaseProfile.opt_level = 3;
+  if (!releaseProfile.optLevel.has_value()) {
+    releaseProfile.optLevel = 3;
   }
   manifest.releaseProfile = releaseProfile;
   return manifest.releaseProfile.value();
@@ -435,7 +443,7 @@ static const fs::path GIT_DIR(CACHE_DIR / "git");
 static const fs::path GIT_SRC_DIR(GIT_DIR / "src");
 
 static const std::unordered_set<char> ALLOWED_CHARS = {
-  '-', '_', '/', '.', '+' // allowed in the dependency name
+  '-', '_', '/', '.', '+'  // allowed in the dependency name
 };
 
 static void
@@ -463,7 +471,7 @@ validateDepName(const std::string_view name) {
     }
   }
 
-  for (usize i = 1; i < name.size(); ++i) {
+  for (size_t i = 1; i < name.size(); ++i) {
     if (name[i] == '+') {
       // Allow consecutive `+` characters.
       continue;
@@ -476,7 +484,7 @@ validateDepName(const std::string_view name) {
       );
     }
   }
-  for (usize i = 1; i < name.size() - 1; ++i) {
+  for (size_t i = 1; i < name.size() - 1; ++i) {
     if (name[i] != '.') {
       continue;
     }
@@ -525,7 +533,7 @@ parseGitDep(const std::string& name, const toml::table& info) {
       }
     }
   }
-  return { name, gitUrlStr, target };
+  return { .name = name, .url = gitUrlStr, .target = target };
 }
 
 static SystemDependency
@@ -537,7 +545,7 @@ parseSystemDep(const std::string& name, const toml::table& info) {
   }
 
   const std::string versionReq = version.as_string();
-  return { name, VersionReq::parse(versionReq) };
+  return { .name = name, .versionReq = VersionReq::parse(versionReq) };
 }
 
 static std::optional<std::vector<std::variant<GitDependency, SystemDependency>>>
@@ -579,7 +587,7 @@ GitDependency::install() const {
   }
 
   if (fs::exists(installDir) && !fs::is_empty(installDir)) {
-    logger::debug(name, " is already installed");
+    logger::debug("{} is already installed", name);
   } else {
     git2::Repository repo;
     repo.clone(url, installDir.string());
@@ -593,12 +601,12 @@ GitDependency::install() const {
     }
 
     logger::info(
-        "Downloaded", name, ' ', target.has_value() ? target.value() : url
+        "Downloaded", "{} {}", name, target.has_value() ? target.value() : url
     );
   }
 
   const fs::path includeDir = installDir / "include";
-  std::string includes = "-isystem ";
+  std::string includes = "-isystem";
 
   if (fs::exists(includeDir) && fs::is_directory(includeDir)
       && !fs::is_empty(includeDir)) {
@@ -608,21 +616,23 @@ GitDependency::install() const {
   }
 
   // Currently, no libs are supported.
-  return { includes, "" };
+  return { .includes = includes, .libs = "" };
 }
 
 DepMetadata
 SystemDependency::install() const {
   const std::string pkgConfigVer = versionReq.toPkgConfigString(name);
-  const std::string cflagsCmd = "pkg-config --cflags '" + pkgConfigVer + "'";
-  const std::string libsCmd = "pkg-config --libs '" + pkgConfigVer + "'";
+  const Command cflagsCmd =
+      Command("pkg-config").addArg("--cflags").addArg(pkgConfigVer);
+  const Command libsCmd =
+      Command("pkg-config").addArg("--libs").addArg(pkgConfigVer);
 
   std::string cflags = getCmdOutput(cflagsCmd);
-  cflags.pop_back(); // remove '\n'
+  cflags.pop_back();  // remove '\n'
   std::string libs = getCmdOutput(libsCmd);
-  libs.pop_back(); // remove '\n'
+  libs.pop_back();  // remove '\n'
 
-  return { cflags, libs };
+  return { .includes = cflags, .libs = libs };
 }
 
 std::vector<DepMetadata>
@@ -659,7 +669,7 @@ installDependencies(const bool includeDevDeps) {
 
 namespace tests {
 
-void
+static void
 testValidateDepName() {
   assertException<PoacError>(
       []() { validateDepName(""); }, "dependency name is empty"
@@ -673,7 +683,7 @@ testValidateDepName() {
       "dependency name must end with an alphanumeric character or `+`"
   );
 
-  for (unsigned char c = 0; c < 255; ++c) {
+  for (char c = 0; c < CHAR_MAX; ++c) {
     if (std::isalnum(c) || ALLOWED_CHARS.contains(c)) {
       continue;
     }
@@ -723,7 +733,7 @@ testValidateDepName() {
   pass();
 }
 
-} // namespace tests
+}  // namespace tests
 
 int
 main() {

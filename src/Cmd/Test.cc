@@ -4,19 +4,24 @@
 #include "../BuildConfig.hpp"
 #include "../Cli.hpp"
 #include "../Logger.hpp"
+#include "../Manifest.hpp"
 #include "../Parallelism.hpp"
-#include "../Rustify.hpp"
 #include "Common.hpp"
 
+#include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
+#include <fmt/core.h>
+#include <fstream>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 static int testMain(std::span<const std::string_view> args);
 
-const Subcmd TEST_CMD = //
+const Subcmd TEST_CMD =  //
     Subcmd{ "test" }
         .setShort("t")
         .setDesc("Run the tests of a local package")
@@ -48,7 +53,17 @@ testMain(const std::span<const std::string_view> args) {
       if (itr + 1 == args.end()) {
         return Subcmd::missingArgumentForOpt(*itr);
       }
-      setParallelism(std::stoul((++itr)->data()));
+      ++itr;
+
+      uint64_t numThreads{};
+      auto [ptr, ec] =
+          std::from_chars(itr->data(), itr->data() + itr->size(), numThreads);
+      if (ec == std::errc()) {
+        setParallelism(numThreads);
+      } else {
+        logger::error("invalid number of threads: ", *itr);
+        return EXIT_FAILURE;
+      }
     } else {
       return TEST_CMD.noSuchArg(*itr);
     }
@@ -56,15 +71,89 @@ testMain(const std::span<const std::string_view> args) {
 
   const auto start = std::chrono::steady_clock::now();
 
-  const std::string outDir = emitMakefile(isDebug, /*includeDevDeps=*/true);
-  const int exitCode = execCmd(getMakeCommand() + " -C " + outDir + " test");
+  const BuildConfig config = emitMakefile(isDebug, /*includeDevDeps=*/true);
+
+  // Collect test targets from the generated Makefile.
+  const std::string unittestTargetPrefix =
+      (config.outBasePath / "unittests").string() + '/';
+  std::vector<std::string> unittestTargets;
+  std::ifstream infile(config.outBasePath / "Makefile");
+  std::string line;
+  while (std::getline(infile, line)) {
+    if (!line.starts_with(unittestTargetPrefix)) {
+      continue;
+    }
+    line = line.substr(0, line.find(':'));
+    if (!line.ends_with(".test")) {
+      continue;
+    }
+    unittestTargets.push_back(line);
+  }
+
+  if (unittestTargets.empty()) {
+    logger::warn("No test targets found");
+    return EXIT_SUCCESS;
+  }
+
+  const std::string& packageName = getPackageName();
+  const Command baseMakeCmd =
+      getMakeCommand().addArg("-C").addArg(config.outBasePath.string());
+
+  // Find not up-to-date test targets, emit compilation status once, and
+  // compile them.
+  int exitCode{};
+  bool alreadyEmitted = false;
+  for (const std::string& target : unittestTargets) {
+    Command checkUpToDateCmd = baseMakeCmd;
+    checkUpToDateCmd.addArg("--question").addArg(target);
+    if (execCmd(checkUpToDateCmd) != EXIT_SUCCESS) {
+      // This test target is not up-to-date.
+      if (!alreadyEmitted) {
+        logger::info(
+            "Compiling", "{} v{} ({})", packageName,
+            getPackageVersion().toString(), getProjectBasePath().string()
+        );
+        alreadyEmitted = true;
+      }
+
+      Command testCmd = baseMakeCmd;
+      testCmd.addArg(target);
+      const int curExitCode = execCmd(testCmd);
+      if (curExitCode != EXIT_SUCCESS) {
+        exitCode = curExitCode;
+      }
+    }
+  }
+  if (exitCode != EXIT_SUCCESS) {
+    // Compilation failed; don't proceed to run tests.
+    return exitCode;
+  }
+
+  // Run tests.
+  for (const std::string& target : unittestTargets) {
+    // `target` always starts with "unittests/" and ends with ".test".
+    // We need to replace "unittests/" with "src/" and remove ".test" to get
+    // the source file path.
+    std::string sourcePath = target;
+    sourcePath.replace(0, unittestTargetPrefix.size(), "src/");
+    sourcePath.resize(sourcePath.size() - ".test"sv.size());
+
+    const std::string testBinPath =
+        fs::relative(target, getProjectBasePath()).string();
+    logger::info("Running", "unittests {} ({})", sourcePath, testBinPath);
+
+    const int curExitCode = execCmd(Command(target));
+    if (curExitCode != EXIT_SUCCESS) {
+      exitCode = curExitCode;
+    }
+  }
 
   const auto end = std::chrono::steady_clock::now();
   const std::chrono::duration<double> elapsed = end - start;
 
   if (exitCode == EXIT_SUCCESS) {
     logger::info(
-        "Finished", modeToString(isDebug), " test(s) in ", elapsed.count(), "s"
+        "Finished", "{} test(s) in {}s", modeToString(isDebug), elapsed.count()
     );
   }
   return exitCode;

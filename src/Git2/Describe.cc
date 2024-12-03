@@ -76,8 +76,8 @@ DescribeFormatOptions::abbreviatedSize(const unsigned int size) {
 }
 
 DescribeFormatOptions&
-DescribeFormatOptions::alwaysUseLongFormat(const bool long_f) {
-  this->raw.always_use_long_format = long_f;
+DescribeFormatOptions::alwaysUseLongFormat(const bool longF) {
+  this->raw.always_use_long_format = longF;
   return *this;
 }
 
@@ -104,4 +104,4 @@ Describe::format(const DescribeFormatOptions& opts) const {
   return { ret.ptr, ret.size };
 }
 
-} // namespace git2
+}  // namespace git2
