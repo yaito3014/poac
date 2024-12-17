@@ -21,3 +21,6 @@ poac-out/
 
 # Doxygen
 html
+
+# MkDocs
+site/
